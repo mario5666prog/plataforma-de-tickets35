@@ -1,0 +1,80 @@
+// Backend: Node.js con Express y MongoDB
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const app = express();
+const PORT = 5000;
+
+app.use(express.json());
+app.use(cors());
+
+// Conexión a MongoDB
+mongoose.connect('mongodb://localhost:27017/ticket_system', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+});
+
+// Modelos
+const Ticket = mongoose.model('Ticket', new mongoose.Schema({
+    tipo: String,
+    reportante: String,
+    fecha: Date,
+    estatus: String,
+    asesor: String,
+    empresa: String
+}));
+
+const Usuario = mongoose.model('Usuario', new mongoose.Schema({
+    nombre: String,
+    correo: String,
+    password: String
+}));
+
+// Registro de usuario
+app.post('/register', async (req, res) => {
+    const { nombre, correo, password } = req.body;
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const usuario = new Usuario({ nombre, correo, password: hashedPassword });
+    await usuario.save();
+    res.send('Usuario registrado');
+});
+
+// Login
+app.post('/login', async (req, res) => {
+    const { correo, password } = req.body;
+    const usuario = await Usuario.findOne({ correo });
+    if (!usuario || !(await bcrypt.compare(password, usuario.password))) {
+        return res.status(400).send('Credenciales inválidas');
+    }
+    const token = jwt.sign({ id: usuario._id }, 'secreto', { expiresIn: '1h' });
+    res.json({ token });
+});
+
+// Obtener todos los tickets
+app.get('/tickets', async (req, res) => {
+    const tickets = await Ticket.find();
+    res.json(tickets);
+});
+
+// Crear un ticket
+app.post('/tickets', async (req, res) => {
+    const ticket = new Ticket(req.body);
+    await ticket.save();
+    res.send('Ticket creado');
+});
+
+// Editar un ticket
+app.put('/tickets/:id', async (req, res) => {
+    await Ticket.findByIdAndUpdate(req.params.id, req.body);
+    res.send('Ticket actualizado');
+});
+
+// Eliminar un ticket
+app.delete('/tickets/:id', async (req, res) => {
+    await Ticket.findByIdAndDelete(req.params.id);
+    res.send('Ticket eliminado');
+});
+
+app.listen(PORT, () => console.log(`Servidor corriendo en el puerto ${PORT}`));
