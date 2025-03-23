@@ -1,0 +1,1472 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert"
+import { AlertCircle, CheckCircle, Plus, Edit, Trash2, Save, X, LogIn, UserPlus, Users, Briefcase, Phone, Mail, IdCard, Calendar } from 'lucide-react';
+import { cn } from "@/lib/utils"
+import { motion, AnimatePresence } from 'framer-motion';
+
+// Interfaces
+interface Ticket {
+  idTicket: string;
+  tipoDeTicket: string;
+  quienReporta: string;
+  fecha: string;
+  estatus: string;
+  asesorQueAtiende: string;
+  empresa: string;
+}
+
+interface Empresa {
+  nombre: string;
+  direccion: string;
+  telefono: string;
+  correo: string;
+  nombreDeContacto: string;
+}
+
+interface Asesor {
+  nombre: string;
+  telefono: string;
+  correo: string;
+  numeroDeTrabajador: string;
+}
+
+interface Cliente {
+  nombre: string;
+  correo: string;
+  empresa: string;
+}
+
+interface User {
+  id: string;
+  username: string;
+  password: string;
+  role: 'admin' | 'user';
+}
+
+// Dummy Data (para desarrollo inicial)
+const initialTickets: Ticket[] = [
+    { idTicket: '1', tipoDeTicket: 'Soporte', quienReporta: 'Cliente A', fecha: '2024-07-24', estatus: 'Abierto', asesorQueAtiende: 'Asesor 1', empresa: 'Empresa X' },
+    { idTicket: '2', tipoDeTicket: 'Incidencia', quienReporta: 'Cliente B', fecha: '2024-07-23', estatus: 'En Proceso', asesorQueAtiende: 'Asesor 2', empresa: 'Empresa Y' },
+    { idTicket: '3', tipoDeTicket: 'Consulta', quienReporta: 'Cliente C', fecha: '2024-07-22', estatus: 'Cerrado', asesorQueAtiende: 'Asesor 1', empresa: 'Empresa Z' },
+];
+
+const initialEmpresas: Empresa[] = [
+    { nombre: 'Empresa X', direccion: 'Dirección 1', telefono: '1234567890', correo: 'empresaX@example.com', nombreDeContacto: 'Contacto 1' },
+    { nombre: 'Empresa Y', direccion: 'Dirección 2', telefono: '9876543210', correo: 'empresaY@example.com', nombreDeContacto: 'Contacto 2' },
+    { nombre: 'Empresa Z', direccion: 'Dirección 3', telefono: '5555555555', correo: 'empresaZ@example.com', nombreDeContacto: 'Contacto 3' },
+];
+
+const initialAsesores: Asesor[] = [
+    { nombre: 'Asesor 1', telefono: '1112223344', correo: 'asesor1@example.com', numeroDeTrabajador: '1001' },
+    { nombre: 'Asesor 2', telefono: '5556667788', correo: 'asesor2@example.com', numeroDeTrabajador: '1002' },
+];
+
+const initialClientes: Cliente[] = [
+    { nombre: 'Cliente A', correo: 'clienteA@example.com', empresa: 'Empresa X' },
+    { nombre: 'Cliente B', correo: 'clienteB@example.com', empresa: 'Empresa Y' },
+    { nombre: 'Cliente C', correo: 'clienteC@example.com', empresa: 'Empresa Z' },
+];
+
+const initialUsers: User[] = [
+    { id: '1', username: 'admin', password: 'password', role: 'admin' },
+    { id: '2', username: 'user', password: 'password', role: 'user' },
+];
+
+// Animation Variants
+const listItemVariants = {
+    hidden: { opacity: 0, y: -10 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
+    exit: { opacity: 0, y: 10, transition: { duration: 0.2 } }
+};
+
+const modalVariants = {
+    hidden: { opacity: 0, scale: 0.8 },
+    visible: { opacity: 1, scale: 1, transition: { duration: 0.3, ease: "easeInOut" } },
+    exit: { opacity: 0, scale: 0.8, transition: { duration: 0.2 } }
+};
+
+// Helper function for date formatting
+const formatDate = (dateString: string) => {
+    const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+    return new Date(dateString).toLocaleDateString(undefined, options);
+};
+
+// Components
+const CustomButton = ({
+    children,
+    variant = 'default',
+    size = 'default',
+    className,
+    onClick,
+    icon: Icon,
+    ...props
+}: {
+    children: React.ReactNode;
+    variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost';
+    size?: 'default' | 'sm' | 'lg' | 'icon';
+    className?: string;
+    onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+    icon?: React.ComponentType<{ className?: string }>;
+    [key: string]: any;  // Para aceptar otros props
+}) => {
+    const baseClasses = `
+    ${variant === 'default' && 'bg-blue-500 hover:bg-blue-600 text-white'}
+    ${variant === 'destructive' && 'bg-red-500 hover:bg-red-600 text-white'}
+    ${variant === 'outline' && 'border border-gray-300 hover:bg-gray-100'}
+    ${variant === 'secondary' && 'bg-gray-200 hover:bg-gray-300 text-gray-800'}
+    ${variant === 'ghost' && 'hover:bg-gray-100 text-gray-800'}
+    ${size === 'sm' && 'px-2 py-1 text-sm'}
+    ${size === 'lg' && 'px-4 py-2 text-lg'}
+    ${size === 'icon' && 'p-2 rounded-full'}
+    ${className}
+  `;
+
+    return (
+        <Button className={baseClasses} onClick={onClick} {...props}>
+            {Icon && <Icon className="mr-2 h-4 w-4" />}
+            {children}
+        </Button>
+    );
+};
+
+const TicketForm = ({
+    isOpen,
+    onClose,
+    onSave,
+    initialTicket,
+    empresas,
+    asesores,
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (ticket: Ticket) => void;
+    initialTicket?: Ticket;
+    empresas: Empresa[];
+    asesores: Asesor[];
+}) => {
+    const [ticket, setTicket] = useState<Ticket>({
+        idTicket: initialTicket?.idTicket || crypto.randomUUID(),
+        tipoDeTicket: initialTicket?.tipoDeTicket || '',
+        quienReporta: initialTicket?.quienReporta || '',
+        fecha: initialTicket?.fecha || new Date().toISOString().split('T')[0],
+        estatus: initialTicket?.estatus || 'Abierto',
+        asesorQueAtiende: initialTicket?.asesorQueAtiende || '',
+        empresa: initialTicket?.empresa || '',
+    });
+    const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
+
+    const validateForm = () => {
+        const errors: { [key: string]: string } = {};
+
+        if (!ticket.tipoDeTicket) {
+            errors.tipoDeTicket = 'El tipo de ticket es requerido.';
+        }
+        if (!ticket.quienReporta) {
+            errors.quienReporta = 'Quién reporta es requerido.';
+        }
+        if (!ticket.fecha) {
+            errors.fecha = 'La fecha es requerida.';
+        }
+        if (!ticket.estatus) {
+            errors.estatus = 'El estatus es requerido.';
+        }
+        if (!ticket.asesorQueAtiende) {
+            errors.asesorQueAtiende = 'El asesor que atiende es requerido.';
+        }
+        if (!ticket.empresa) {
+            errors.empresa = 'La empresa es requerida.';
+        }
+
+        setFormErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        setTicket({ ...ticket, [name]: value });
+        setFormErrors({ ...formErrors, [name]: '' }); // Clear error on input change
+    };
+
+    const handleSelectChange = (name: string, value: string) => {
+        setTicket({ ...ticket, [name]: value });
+        setFormErrors({ ...formErrors, [name]: '' });
+    };
+
+    const handleSave = () => {
+        if (validateForm()) {
+            onSave(ticket);
+            onClose();
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle>{initialTicket ? 'Editar Ticket' : 'Nuevo Ticket'}</DialogTitle>
+                    <DialogDescription>
+                        {initialTicket ? 'Modifica los detalles del ticket.' : 'Ingresa los detalles del nuevo ticket.'}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="tipoDeTicket" className="text-right">
+                            Tipo de Ticket
+                        </Label>
+                        <Input
+                            id="tipoDeTicket"
+                            name="tipoDeTicket"
+                            value={ticket.tipoDeTicket}
+                            onChange={handleInputChange}
+                            className="col-span-3"
+                            placeholder="Ej: Soporte, Incidencia..."
+                        />
+                        {formErrors.tipoDeTicket && (
+                            <div className="col-span-4 text-red-500 text-sm">{formErrors.tipoDeTicket}</div>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="quienReporta" className="text-right">
+                            Quién Reporta
+                        </Label>
+                        <Input
+                            id="quienReporta"
+                            name="quienReporta"
+                            value={ticket.quienReporta}
+                            onChange={handleInputChange}
+                            className="col-span-3"
+                            placeholder="Ej: Nombre del Cliente..."
+                        />
+                         {formErrors.quienReporta && (
+                            <div className="col-span-4 text-red-500 text-sm">{formErrors.quienReporta}</div>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="fecha" className="text-right">
+                            Fecha
+                        </Label>
+                        <Input
+                            id="fecha"
+                            type="date"
+                            name="fecha"
+                            value={ticket.fecha}
+                            onChange={handleInputChange}
+                            className="col-span-3"
+                        />
+                         {formErrors.fecha && (
+                            <div className="col-span-4 text-red-500 text-sm">{formErrors.fecha}</div>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="estatus" className="text-right">
+                            Estatus
+                        </Label>
+                        <Select
+                            onValueChange={(value) => handleSelectChange('estatus', value)}
+                            defaultValue={ticket.estatus}
+                        >
+                            <SelectTrigger className="col-span-3">
+                                <SelectValue placeholder="Selecciona un estatus" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Abierto">Abierto</SelectItem>
+                                <SelectItem value="En Proceso">En Proceso</SelectItem>
+                                <SelectItem value="Cerrado">Cerrado</SelectItem>
+                            </SelectContent>
+                        </Select>
+                         {formErrors.estatus && (
+                            <div className="col-span-4 text-red-500 text-sm">{formErrors.estatus}</div>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="asesorQueAtiende" className="text-right">
+                            Asesor
+                        </Label>
+                        <Select
+                            onValueChange={(value) => handleSelectChange('asesorQueAtiende', value)}
+                            defaultValue={ticket.asesorQueAtiende}
+                        >
+                            <SelectTrigger className="col-span-3">
+                                <SelectValue placeholder="Selecciona un asesor" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {asesores.map((asesor) => (
+                                    <SelectItem key={asesor.numeroDeTrabajador} value={asesor.nombre}>
+                                        {asesor.nombre}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                         {formErrors.asesorQueAtiende && (
+                            <div className="col-span-4 text-red-500 text-sm">{formErrors.asesorQueAtiende}</div>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="empresa" className="text-right">
+                            Empresa
+                        </Label>
+                        <Select
+                            onValueChange={(value) => handleSelectChange('empresa', value)}
+                            defaultValue={ticket.empresa}
+                        >
+                            <SelectTrigger className="col-span-3">
+                                <SelectValue placeholder="Selecciona una empresa" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {empresas.map((empresa) => (
+                                    <SelectItem key={empresa.nombre} value={empresa.nombre}>
+                                        {empresa.nombre}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                         {formErrors.empresa && (
+                            <div className="col-span-4 text-red-500 text-sm">{formErrors.empresa}</div>
+                        )}
+                    </div>
+                </div>
+                <DialogFooter>
+                    <CustomButton variant="outline" onClick={onClose}>
+                        <X className="mr-2 h-4 w-4" /> Cancelar
+                    </CustomButton>
+                    <CustomButton variant="default" onClick={handleSave}>
+                        <Save className="mr-2 h-4 w-4" /> Guardar
+                    </CustomButton>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+const EmpresaForm = ({
+    isOpen,
+    onClose,
+    onSave,
+    initialEmpresa,
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (empresa: Empresa) => void;
+    initialEmpresa?: Empresa;
+}) => {
+    const [empresa, setEmpresa] = useState<Empresa>({
+        nombre: initialEmpresa?.nombre || '',
+        direccion: initialEmpresa?.direccion || '',
+        telefono: initialEmpresa?.telefono || '',
+        correo: initialEmpresa?.correo || '',
+        nombreDeContacto: initialEmpresa?.nombreDeContacto || '',
+    });
+    const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
+
+      const validateForm = () => {
+        const errors: { [key: string]: string } = {};
+
+        if (!empresa.nombre) {
+            errors.nombre = 'El nombre es requerido.';
+        }
+        if (!empresa.direccion) {
+            errors.direccion = 'La dirección es requerida.';
+        }
+        if (!empresa.telefono) {
+            errors.telefono = 'El teléfono es requerido.';
+        }
+        if (!empresa.correo) {
+            errors.correo = 'El correo es requerido.';
+        }
+         if (!empresa.nombreDeContacto) {
+            errors.nombreDeContacto = 'El nombre de contacto es requerido.';
+        }
+
+        setFormErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+        setEmpresa({ ...empresa, [name]: value });
+        setFormErrors({ ...formErrors, [name]: '' });
+    };
+
+    const handleSave = () => {
+        if (validateForm()) {
+            onSave(empresa);
+            onClose();
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle>{initialEmpresa ? 'Editar Empresa' : 'Nueva Empresa'}</DialogTitle>
+                    <DialogDescription>
+                        {initialEmpresa ? 'Modifica los detalles de la empresa.' : 'Ingresa los detalles de la nueva empresa.'}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="nombre" className="text-right">
+                            Nombre
+                        </Label>
+                        <Input
+                            id="nombre"
+                            name="nombre"
+                            value={empresa.nombre}
+                            onChange={handleInputChange}
+                            className="col-span-3"
+                            placeholder="Ej: Nombre de la Empresa..."
+                        />
+                         {formErrors.nombre && (
+                            <div className="col-span-4 text-red-500 text-sm">{formErrors.nombre}</div>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="direccion" className="text-right">
+                            Dirección
+                        </Label>
+                        <Input
+                            id="direccion"
+                            name="direccion"
+                            value={empresa.direccion}
+                            onChange={handleInputChange}
+                            className="col-span-3"
+                            placeholder="Ej: Dirección de la Empresa..."
+                        />
+                         {formErrors.direccion && (
+                            <div className="col-span-4 text-red-500 text-sm">{formErrors.direccion}</div>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="telefono" className="text-right">
+                            Teléfono
+                        </Label>
+                        <Input
+                            id="telefono"
+                            name="telefono"
+                            value={empresa.telefono}
+                            onChange={handleInputChange}
+                            className="col-span-3"
+                            placeholder="Ej: 1234567890"
+                        />
+                         {formErrors.telefono && (
+                            <div className="col-span-4 text-red-500 text-sm">{formErrors.telefono}</div>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="correo" className="text-right">
+                            Correo
+                        </Label>
+                        <Input
+                            id="correo"
+                            type="email"
+                            name="correo"
+                            value={empresa.correo}
+                            onChange={handleInputChange}
+                            className="col-span-3"
+                            placeholder="Ej: empresa@example.com"
+                        />
+                         {formErrors.correo && (
+                            <div className="col-span-4 text-red-500 text-sm">{formErrors.correo}</div>
+                        )}
+                    </div>
+                     <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="nombreDeContacto" className="text-right">
+                            Contacto
+                        </Label>
+                        <Input
+                            id="nombreDeContacto"
+                            name="nombreDeContacto"
+                            value={empresa.nombreDeContacto}
+                            onChange={handleInputChange}
+                            className="col-span-3"
+                            placeholder="Ej: Nombre del Contacto"
+                        />
+                         {formErrors.nombreDeContacto && (
+                            <div className="col-span-4 text-red-500 text-sm">{formErrors.nombreDeContacto}</div>
+                        )}
+                    </div>
+                </div>
+                <DialogFooter>
+                    <CustomButton variant="outline" onClick={onClose}>
+                        <X className="mr-2 h-4 w-4" /> Cancelar
+                    </CustomButton>
+                    <CustomButton variant="default" onClick={handleSave}>
+                        <Save className="mr-2 h-4 w-4" /> Guardar
+                    </CustomButton>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+const AsesorForm = ({
+    isOpen,
+    onClose,
+    onSave,
+    initialAsesor,
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (asesor: Asesor) => void;
+    initialAsesor?: Asesor;
+}) => {
+    const [asesor, setAsesor] = useState<Asesor>({
+        nombre: initialAsesor?.nombre || '',
+        telefono: initialAsesor?.telefono || '',
+        correo: initialAsesor?.correo || '',
+        numeroDeTrabajador: initialAsesor?.numeroDeTrabajador || '',
+    });
+    const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
+
+    const validateForm = () => {
+        const errors: { [key: string]: string } = {};
+
+        if (!asesor.nombre) {
+            errors.nombre = 'El nombre es requerido.';
+        }
+        if (!asesor.telefono) {
+            errors.telefono = 'El teléfono es requerido.';
+        }
+        if (!asesor.correo) {
+            errors.correo = 'El correo es requerido.';
+        }
+        if (!asesor.numeroDeTrabajador) {
+            errors.numeroDeTrabajador = 'El número de trabajador es requerido.';
+        }
+
+        setFormErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+        setAsesor({ ...asesor, [name]: value });
+        setFormErrors({ ...formErrors, [name]: '' });
+    };
+
+    const handleSave = () => {
+        if (validateForm()) {
+            onSave(asesor);
+            onClose();
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle>{initialAsesor ? 'Editar Asesor' : 'Nuevo Asesor'}</DialogTitle>
+                    <DialogDescription>
+                        {initialAsesor ? 'Modifica los detalles del asesor.' : 'Ingresa los detalles del nuevo asesor.'}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="nombre" className="text-right">
+                            Nombre
+                        </Label>
+                        <Input
+                            id="nombre"
+                            name="nombre"
+                            value={asesor.nombre}
+                            onChange={handleInputChange}
+                            className="col-span-3"
+                            placeholder="Ej: Nombre del Asesor..."
+                        />
+                         {formErrors.nombre && (
+                            <div className="col-span-4 text-red-500 text-sm">{formErrors.nombre}</div>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="telefono" className="text-right">
+                            Teléfono
+                        </Label>
+                        <Input
+                            id="telefono"
+                            name="telefono"
+                            value={asesor.telefono}
+                            onChange={handleInputChange}
+                            className="col-span-3"
+                            placeholder="Ej: 1234567890"
+                        />
+                         {formErrors.telefono && (
+                            <div className="col-span-4 text-red-500 text-sm">{formErrors.telefono}</div>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="correo" className="text-right">
+                            Correo
+                        </Label>
+                        <Input
+                            id="correo"
+                            type="email"
+                            name="correo"
+                            value={asesor.correo}
+                            onChange={handleInputChange}
+                            className="col-span-3"
+                            placeholder="Ej: asesor@example.com"
+                        />
+                         {formErrors.correo && (
+                            <div className="col-span-4 text-red-500 text-sm">{formErrors.correo}</div>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="numeroDeTrabajador" className="text-right">
+                            No. Trabajador
+                        </Label>
+                        <Input
+                            id="numeroDeTrabajador"
+                            name="numeroDeTrabajador"
+                            value={asesor.numeroDeTrabajador}
+                            onChange={handleInputChange}
+                            className="col-span-3"
+                            placeholder="Ej: 1001"
+                        />
+                         {formErrors.numeroDeTrabajador && (
+                            <div className="col-span-4 text-red-500 text-sm">{formErrors.numeroDeTrabajador}</div>
+                        )}
+                    </div>
+                </div>
+                <DialogFooter>
+                    <CustomButton variant="outline" onClick={onClose}>
+                        <X className="mr-2 h-4 w-4" /> Cancelar
+                    </CustomButton>
+                    <CustomButton variant="default" onClick={handleSave}>
+                        <Save className="mr-2 h-4 w-4" /> Guardar
+                    </CustomButton>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+const ClienteForm = ({
+    isOpen,
+    onClose,
+    onSave,
+    initialCliente,
+    empresas,
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (cliente: Cliente) => void;
+    initialCliente?: Cliente;
+    empresas: Empresa[];
+}) => {
+    const [cliente, setCliente] = useState<Cliente>({
+        nombre: initialCliente?.nombre || '',
+        correo: initialCliente?.correo || '',
+        empresa: initialCliente?.empresa || '',
+    });
+    const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
+
+    const validateForm = () => {
+        const errors: { [key: string]: string } = {};
+
+        if (!cliente.nombre) {
+            errors.nombre = 'El nombre es requerido.';
+        }
+        if (!cliente.correo) {
+            errors.correo = 'El correo es requerido.';
+        }
+        if (!cliente.empresa) {
+            errors.empresa = 'La empresa es requerida.';
+        }
+
+        setFormErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+        setCliente({ ...cliente, [name]: value });
+        setFormErrors({ ...formErrors, [name]: '' });
+    };
+
+     const handleSelectChange = (name: string, value: string) => {
+        setCliente({ ...cliente, [name]: value });
+        setFormErrors({ ...formErrors, [name]: '' });
+    };
+
+    const handleSave = () => {
+        if (validateForm()) {
+            onSave(cliente);
+            onClose();
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle>{initialCliente ? 'Editar Cliente' : 'Nuevo Cliente'}</DialogTitle>
+                    <DialogDescription>
+                        {initialCliente ? 'Modifica los detalles del cliente.' : 'Ingresa los detalles del nuevo cliente.'}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="nombre" className="text-right">
+                            Nombre
+                        </Label>
+                        <Input
+                            id="nombre"
+                            name="nombre"
+                            value={cliente.nombre}
+                            onChange={handleInputChange}
+                            className="col-span-3"
+                            placeholder="Ej: Nombre del Cliente..."
+                        />
+                         {formErrors.nombre && (
+                            <div className="col-span-4 text-red-500 text-sm">{formErrors.nombre}</div>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="correo" className="text-right">
+                            Correo
+                        </Label>
+                        <Input
+                            id="correo"
+                            type="email"
+                            name="correo"
+                            value={cliente.correo}
+                            onChange={handleInputChange}
+                            className="col-span-3"
+                            placeholder="Ej: cliente@example.com"
+                        />
+                         {formErrors.correo && (
+                            <div className="col-span-4 text-red-500 text-sm">{formErrors.correo}</div>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="empresa" className="text-right">
+                            Empresa
+                        </Label>
+                         <Select
+                            onValueChange={(value) => handleSelectChange('empresa', value)}
+                            defaultValue={cliente.empresa}
+                        >
+                            <SelectTrigger className="col-span-3">
+                                <SelectValue placeholder="Selecciona una empresa" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {empresas.map((empresa) => (
+                                    <SelectItem key={empresa.nombre} value={empresa.nombre}>
+                                        {empresa.nombre}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                         {formErrors.empresa && (
+                            <div className="col-span-4 text-red-500 text-sm">{formErrors.empresa}</div>
+                        )}
+                    </div>
+                </div>
+                <DialogFooter>
+                    <CustomButton variant="outline" onClick={onClose}>
+                         <X className="mr-2 h-4 w-4" /> Cancelar
+                    </CustomButton>
+                    <CustomButton variant="default" onClick={handleSave}>
+                        <Save className="mr-2 h-4 w-4" /> Guardar
+                    </CustomButton>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+const LoginForm = ({ onLogin }: { onLogin: (user: User) => void }) => {
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+
+    const handleLogin = () => {
+        const user = initialUsers.find(u => u.username === username && u.password === password);
+        if (user) {
+            onLogin(user);
+        } else {
+            setError('Credenciales inválidas. Por favor, intenta de nuevo.');
+        }
+    };
+
+    return (
+        <div className="flex items-center justify-center h-screen bg-gray-100">
+            <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+                <h2 className="text-2xl font-semibold mb-6 text-center">Iniciar Sesión</h2>
+                {error && (
+                    <Alert variant="destructive" className="mb-4">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>Error</AlertTitle>
+                        <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                )}
+                <div className="mb-4">
+                    <Label htmlFor="username" className="block text-gray-700 text-sm font-bold mb-2">
+                        Usuario
+                    </Label>
+                    <Input
+                        type="text"
+                        id="username"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="Ingresa tu usuario"
+                        className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    />
+                </div>
+                <div className="mb-6">
+                    <Label htmlFor="password" className="block text-gray-700 text-sm font-bold mb-2">
+                        Contraseña
+                    </Label>
+                    <Input
+                        type="password"
+                        id="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Ingresa tu contraseña"
+                        className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    />
+                </div>
+                <CustomButton
+                    variant="default"
+                    className="w-full"
+                    onClick={handleLogin}
+                >
+                    <LogIn className="mr-2 h-4 w-4" /> Iniciar Sesión
+                </CustomButton>
+            </div>
+        </div>
+    );
+};
+
+const RegisterForm = ({ onRegister }: { onRegister: (user: User) => void }) => {
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [role, setRole] = useState<'admin' | 'user'>('user');
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+
+    const handleRegister = () => {
+        if (!username || !password || !confirmPassword) {
+            setError('Todos los campos son requeridos.');
+            return;
+        }
+
+        if (password !== confirmPassword) {
+            setError('Las contraseñas no coinciden.');
+            return;
+        }
+
+        if (initialUsers.find(u => u.username === username)) {
+            setError('El nombre de usuario ya está en uso.');
+            return;
+        }
+
+        const newUser: User = {
+            id: crypto.randomUUID(),
+            username,
+            password,
+            role,
+        };
+
+        onRegister(newUser);
+        setSuccess('Registro exitoso. ¡Puedes iniciar sesión!');
+        setError('');
+        setUsername('');
+        setPassword('');
+        setConfirmPassword('');
+        setRole('user'); // Reset role to default
+    };
+
+    return (
+        <div className="flex items-center justify-center h-screen bg-gray-100">
+            <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+                <h2 className="text-2xl font-semibold mb-6 text-center">Registrarse</h2>
+                {error && (
+                    <Alert variant="destructive" className="mb-4">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>Error</AlertTitle>
+                        <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                )}
+                {success && (
+                    <Alert className="mb-4">
+                        <CheckCircle className="h-4 w-4" />
+                        <AlertTitle>Éxito</AlertTitle>
+                        <AlertDescription>{success}</AlertDescription>
+                    </Alert>
+                )}
+                <div className="mb-4">
+                    <Label htmlFor="username" className="block text-gray-700 text-sm font-bold mb-2">
+                        Usuario
+                    </Label>
+                    <Input
+                        type="text"
+                        id="username"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="Ingresa tu usuario"
+                        className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    />
+                </div>
+                <div className="mb-4">
+                    <Label htmlFor="password" className="block text-gray-700 text-sm font-bold mb-2">
+                        Contraseña
+                    </Label>
+                    <Input
+                        type="password"
+                        id="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Ingresa tu contraseña"
+                        className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    />
+                </div>
+                <div className="mb-4">
+                    <Label htmlFor="confirmPassword" className="block text-gray-700 text-sm font-bold mb-2">
+                        Confirmar Contraseña
+                    </Label>
+                    <Input
+                        type="password"
+                        id="confirmPassword"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Confirma tu contraseña"
+                        className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    />
+                </div>
+                <div className="mb-4">
+                    <Label htmlFor="role" className="block text-gray-700 text-sm font-bold mb-2">
+                        Rol
+                    </Label>
+                    <Select onValueChange={(value) => setRole(value as 'admin' | 'user')} value={role}>
+                        <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Selecciona un rol" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="user">Usuario</SelectItem>
+                            <SelectItem value="admin">Administrador</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <CustomButton
+                    variant="default"
+                    className="w-full"
+                    onClick={handleRegister}
+                >
+                    <UserPlus className="mr-2 h-4 w-4" /> Registrarse
+                </CustomButton>
+            </div>
+        </div>
+    );
+};
+
+// Main App Component
+const App = () => {
+    const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
+    const [empresas, setEmpresas] = useState<Empresa[]>(initialEmpresas);
+    const [asesores, setAsesores] = useState<Asesor[]>(initialAsesores);
+    const [clientes, setClientes] = useState<Cliente[]>(initialClientes);
+    const [isTicketFormOpen, setIsTicketFormOpen] = useState(false);
+    const [isEmpresaFormOpen, setIsEmpresaFormOpen] = useState(false);
+    const [isAsesorFormOpen, setIsAsesorFormOpen] = useState(false);
+    const [isClienteFormOpen, setIsClienteFormOpen] = useState(false);
+    const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
+    const [editingEmpresa, setEditingEmpresa] = useState<Empresa | null>(null);
+    const [editingAsesor, setEditingAsesor] = useState<Asesor | null>(null);
+    const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
+    const [user, setUser] = useState<User | null>(null); // null if not logged in
+    const [showRegister, setShowRegister] = useState(false);
+
+    // Load data from localStorage
+    useEffect(() => {
+        const storedTickets = localStorage.getItem('tickets');
+        const storedEmpresas = localStorage.getItem('empresas');
+        const storedAsesores = localStorage.getItem('asesores');
+        const storedClientes = localStorage.getItem('clientes');
+        const storedUser = localStorage.getItem('user');
+
+        if (storedTickets) {
+            setTickets(JSON.parse(storedTickets));
+        }
+        if (storedEmpresas) {
+            setEmpresas(JSON.parse(storedEmpresas));
+        }
+        if (storedAsesores) {
+            setAsesores(JSON.parse(storedAsesores));
+        }
+         if (storedClientes) {
+            setClientes(JSON.parse(storedClientes));
+        }
+        if (storedUser) {
+            setUser(JSON.parse(storedUser));
+        }
+    }, []);
+
+    // Save data to localStorage
+    useEffect(() => {
+        localStorage.setItem('tickets', JSON.stringify(tickets));
+        localStorage.setItem('empresas', JSON.stringify(empresas));
+        localStorage.setItem('asesores', JSON.stringify(asesores));
+        localStorage.setItem('clientes', JSON.stringify(clientes));
+        if (user) {
+            localStorage.setItem('user', JSON.stringify(user));
+        } else {
+            localStorage.removeItem('user'); // Remove user from localStorage when logged out
+        }
+    }, [tickets, empresas, asesores, clientes, user]);
+
+    const handleLogin = (loggedInUser: User) => {
+        setUser(loggedInUser);
+    };
+
+    const handleLogout = () => {
+        setUser(null);
+    };
+
+    const handleRegister = (newUser: User) => {
+        // In a real app, you'd save this user to a database.  For this example, we'll just add to our local state.
+        initialUsers.push(newUser);
+        // Auto-login the new user (optional)
+        setUser(newUser);
+        setShowRegister(false); // Hide register form
+    };
+
+    const handleAddTicket = (newTicket: Ticket) => {
+        if (editingTicket) {
+            // Update existing ticket
+            setTickets(tickets.map(t => t.idTicket === newTicket.idTicket ? newTicket : t));
+            setEditingTicket(null);
+        } else {
+             // Add new ticket
+            setTickets([...tickets, newTicket]);
+        }
+    };
+
+     const handleAddEmpresa = (newEmpresa: Empresa) => {
+        if (editingEmpresa) {
+            setEmpresas(empresas.map(e => e.nombre === newEmpresa.nombre ? newEmpresa : e));
+            setEditingEmpresa(null);
+        } else {
+            setEmpresas([...empresas, newEmpresa]);
+        }
+    };
+
+    const handleAddAsesor = (newAsesor: Asesor) => {
+        if(editingAsesor){
+            setAsesores(asesores.map(a => a.numeroDeTrabajador === newAsesor.numeroDeTrabajador ? newAsesor : a));
+            setEditingAsesor(null);
+        }
+        else{
+            setAsesores([...asesores, newAsesor]);
+        }
+
+    };
+
+    const handleAddCliente = (newCliente: Cliente) => {
+        if(editingCliente){
+            setClientes(clientes.map(c => c.correo === newCliente.correo ? newCliente : c));
+            setEditingCliente(null);
+        }
+        else{
+            setClientes([...clientes, newCliente]);
+        }
+
+    };
+
+    const handleEditTicket = (ticket: Ticket) => {
+        setEditingTicket(ticket);
+        setIsTicketFormOpen(true);
+    };
+
+    const handleEditEmpresa = (empresa: Empresa) => {
+        setEditingEmpresa(empresa);
+        setIsEmpresaFormOpen(true);
+    };
+
+    const handleEditAsesor = (asesor: Asesor) => {
+        setEditingAsesor(asesor);
+        setIsAsesorFormOpen(true);
+    };
+
+     const handleEditCliente = (cliente: Cliente) => {
+        setEditingCliente(cliente);
+        setIsClienteFormOpen(true);
+    };
+
+    const handleDeleteTicket = (idTicket: string) => {
+        setTickets(tickets.filter(t => t.idTicket !== idTicket));
+    };
+
+    const handleDeleteEmpresa = (nombre: string) => {
+        setEmpresas(empresas.filter(e => e.nombre !== nombre));
+    };
+     const handleDeleteAsesor = (numeroDeTrabajador: string) => {
+        setAsesores(asesores.filter(a => a.numeroDeTrabajador !== numeroDeTrabajador));
+    };
+    const handleDeleteCliente = (correo: string) => {
+        setClientes(clientes.filter(c => c.correo !== correo));
+    };
+
+    if (!user) {
+        return (
+            <>
+                {showRegister ? (
+                    <RegisterForm onRegister={handleRegister} />
+                ) : (
+                    <LoginForm onLogin={handleLogin} />
+                )}
+                <div className="text-center mt-4">
+                    <button
+                        className="text-blue-500 hover:underline"
+                        onClick={() => setShowRegister(!showRegister)}
+                    >
+                        {showRegister ? '¿Ya tienes una cuenta? Inicia sesión' : '¿No tienes una cuenta? Regístrate'}
+                    </button>
+                </div>
+            </>
+        );
+    }
+
+    return (
+        <div className="p-4">
+            <div className="flex justify-between items-center mb-4">
+                <h1 className="text-2xl font-bold">Sistema de Gestión de Tickets</h1>
+                <div className="flex items-center gap-4">
+                    <span className="text-gray-600">
+                        Bienvenido, {user.username} ({user.role})
+                    </span>
+                    <CustomButton variant="outline" onClick={handleLogout}>
+                        Cerrar Sesión
+                    </CustomButton>
+                </div>
+            </div>
+
+            <div className="mb-8">
+                <h2 className="text-xl font-semibold mb-4">Tickets</h2>
+                <div className="mb-4">
+                    <CustomButton variant="default" onClick={() => {
+                        setIsTicketFormOpen(true);
+                        setEditingTicket(null);
+                    }}>
+                        <Plus className="mr-2 h-4 w-4" /> Nuevo Ticket
+                    </CustomButton>
+                </div>
+                <AnimatePresence>
+                {tickets.length > 0 ? (
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>ID Ticket</TableHead>
+                                <TableHead>Tipo de Ticket</TableHead>
+                                <TableHead>Quién Reporta</TableHead>
+                                <TableHead>Fecha</TableHead>
+                                <TableHead>Estatus</TableHead>
+                                <TableHead>Asesor</TableHead>
+                                <TableHead>Empresa</TableHead>
+                                <TableHead>Acciones</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {tickets.map((ticket) => (
+                                 <motion.tr
+                                    key={ticket.idTicket}
+                                    variants={listItemVariants}
+                                    initial="hidden"
+                                    animate="visible"
+                                    exit="exit"
+                                >
+                                    <TableCell>{ticket.idTicket}</TableCell>
+                                    <TableCell>{ticket.tipoDeTicket}</TableCell>
+                                    <TableCell>{ticket.quienReporta}</TableCell>
+                                    <TableCell>{formatDate(ticket.fecha)}</TableCell>
+                                    <TableCell>{ticket.estatus}</TableCell>
+                                    <TableCell>{ticket.asesorQueAtiende}</TableCell>
+                                    <TableCell>{ticket.empresa}</TableCell>
+                                    <TableCell>
+                                        <div className="flex gap-2">
+                                            <CustomButton
+                                                variant="outline"
+                                                size="icon"
+                                                onClick={() => handleEditTicket(ticket)}
+                                            >
+                                                <Edit className="h-4 w-4" />
+                                            </CustomButton>
+                                            <CustomButton
+                                                variant="destructive"
+                                                size="icon"
+                                                onClick={() => handleDeleteTicket(ticket.idTicket)}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </CustomButton>
+                                        </div>
+                                    </TableCell>
+                                </motion.tr>
+                            ))}
+                        </TableBody>
+                    </Table>
+                ) : (
+                    <div className="text-gray-500">No hay tickets registrados.</div>
+                )}
+                </AnimatePresence>
+            </div>
+
+            <div className="mb-8">
+                <h2 className="text-xl font-semibold mb-4">Empresas</h2>
+                 <div className="mb-4">
+                    <CustomButton variant="default" onClick={() => {
+                        setIsEmpresaFormOpen(true);
+                        setEditingEmpresa(null);
+                    }}>
+                        <Plus className="mr-2 h-4 w-4" /> Nueva Empresa
+                    </CustomButton>
+                </div>
+                <AnimatePresence>
+                {empresas.length > 0 ? (
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Nombre</TableHead>
+                                <TableHead>Dirección</TableHead>
+                                <TableHead>Teléfono</TableHead>
+                                <TableHead>Correo</TableHead>
+                                 <TableHead>Contacto</TableHead>
+                                <TableHead>Acciones</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {empresas.map((empresa) => (
+                                <motion.tr
+                                    key={empresa.nombre}
+                                    variants={listItemVariants}
+                                    initial="hidden"
+                                    animate="visible"
+                                    exit="exit"
+                                >
+                                    <TableCell>{empresa.nombre}</TableCell>
+                                    <TableCell>{empresa.direccion}</TableCell>
+                                    <TableCell>{empresa.telefono}</TableCell>
+                                    <TableCell>{empresa.correo}</TableCell>
+                                    <TableCell>{empresa.nombreDeContacto}</TableCell>
+                                    <TableCell>
+                                        <div className="flex gap-2">
+                                             <CustomButton
+                                                variant="outline"
+                                                size="icon"
+                                                onClick={() => handleEditEmpresa(empresa)}
+                                            >
+                                                <Edit className="h-4 w-4" />
+                                            </CustomButton>
+                                            <CustomButton
+                                                variant="destructive"
+                                                size="icon"
+                                                onClick={() => handleDeleteEmpresa(empresa.nombre)}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </CustomButton>
+                                        </div>
+                                    </TableCell>
+                               </motion.tr>
+                            ))}
+                        </TableBody>
+                    </Table>
+                ) : (
+                    <div className="text-gray-500">No hay empresas registradas.</div>
+                )}
+                </AnimatePresence>
+            </div>
+
+            <div className="mb-8">
+                <h2 className="text-xl font-semibold mb-4">Asesores</h2>
+                <div className="mb-4">
+                    <CustomButton variant="default" onClick={() => {
+                        setIsAsesorFormOpen(true);
+                        setEditingAsesor(null);
+                    }}>
+                        <Plus className="mr-2 h-4 w-4" /> Nuevo Asesor
+                    </CustomButton>
+                </div>
+                <AnimatePresence>
+                {asesores.length > 0 ? (
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Nombre</TableHead>
+                                <TableHead>Teléfono</TableHead>
+                                <TableHead>Correo</TableHead>
+                                <TableHead>No. Trabajador</TableHead>
+                                <TableHead>Acciones</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {asesores.map((asesor) => (
+                                <motion.tr
+                                    key={asesor.numeroDeTrabajador}
+                                    variants={listItemVariants}
+                                    initial="hidden"
+                                    animate="visible"
+                                    exit="exit"
+                                >
+                                    <TableCell>{asesor.nombre}</TableCell>
+                                    <TableCell>{asesor.telefono}</TableCell>
+                                    <TableCell>{asesor.correo}</TableCell>
+                                    <TableCell>{asesor.numeroDeTrabajador}</TableCell>
+                                    <TableCell>
+                                        <div className="flex gap-2">
+                                            <CustomButton
+                                                variant="outline"
+                                                size="icon"
+                                                onClick={() => handleEditAsesor(asesor)}
+                                            >
+                                                <Edit className="h-4 w-4" />
+                                            </CustomButton>
+                                            <CustomButton
+                                                variant="destructive"
+                                                size="icon"
+                                                onClick={() => handleDeleteAsesor(asesor.numeroDeTrabajador)}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </CustomButton>
+                                        </div>
+                                    </TableCell>
+                                </motion.tr>
+                            ))}
+                        </TableBody>
+                    </Table>
+                ) : (
+                    <div className="text-gray-500">No hay asesores registrados.</div>
+                )}
+                </AnimatePresence>
+            </div>
+
+            <div>
+                <h2 className="text-xl font-semibold mb-4">Clientes</h2>
+                <div className="mb-4">
+                    <CustomButton variant="default" onClick={() => {
+                        setIsClienteFormOpen(true);
+                        setEditingCliente(null);
+                    }}>
+                        <Plus className="mr-2 h-4 w-4" /> Nuevo Cliente
+                    </CustomButton>
+                </div>
+                <AnimatePresence>
+                {clientes.length > 0 ? (
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Nombre</TableHead>
+                                <TableHead>Correo</TableHead>
+                                <TableHead>Empresa</TableHead>
+                                <TableHead>Acciones</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {clientes.map((cliente) => (
+                                <motion.tr
+                                    key={cliente.correo}
+                                    variants={listItemVariants}
+                                    initial="hidden"
+                                    animate="visible"
+                                    exit="exit"
+                                >
+                                    <TableCell>{cliente.nombre}</TableCell>
+                                    <TableCell>{cliente.correo}</TableCell>
+                                    <TableCell>{cliente.empresa}</TableCell>
+                                    <TableCell>
+                                        <div className="flex gap-2">
+                                            <CustomButton
+                                                variant="outline"
+                                                size="icon"
+                                                onClick={() => handleEditCliente(cliente)}
+                                            >
+                                                <Edit className="h-4 w-4" />
+                                            </CustomButton>
+                                            <CustomButton
+                                                variant="destructive"
+                                                size="icon"
+                                                onClick={() => handleDeleteCliente(cliente.correo)}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </CustomButton>
+                                        </div>
+                                    </TableCell>
+                                </motion.tr>
+                            ))}
+                        </TableBody>
+                    </Table>
+                ) : (
+                    <div className="text-gray-500">No hay clientes registrados.</div>
+                )}
+                </AnimatePresence>
+            </div>
+
+            <TicketForm
+                isOpen={isTicketFormOpen}
+                onClose={() => {
+                    setIsTicketFormOpen(false);
+                    setEditingTicket(null);
+                }}
+                onSave={handleAddTicket}
+                initialTicket={editingTicket || undefined}
+                empresas={empresas}
+                asesores={asesores}
+            />
+            <EmpresaForm
+                isOpen={isEmpresaFormOpen}
+                onClose={() => {
+                    setIsEmpresaFormOpen(false);
+                    setEditingEmpresa(null);
+                }}
+                onSave={handleAddEmpresa}
+                initialEmpresa={editingEmpresa || undefined}
+            />
+            <AsesorForm
+                isOpen={isAsesorFormOpen}
+                onClose={() => {
+                    setIsAsesorFormOpen(false);
+                    setEditingAsesor(null);
+                }}
+                onSave={handleAddAsesor}
+                initialAsesor={editingAsesor || undefined}
+            />
+             <ClienteForm
+                isOpen={isClienteFormOpen}
+                onClose={() => {
+                    setIsClienteFormOpen(false);
+                    setEditingCliente(null);
+                }}
+                onSave={handleAddCliente}
+                initialCliente={editingCliente || undefined}
+                empresas={empresas}
+            />
+        </div>
+    );
+};
+
+export default App;
